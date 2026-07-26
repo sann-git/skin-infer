@@ -29,6 +29,7 @@ jobs:
             g++ -O2 -std=c++17 main.cpp \
               -I ort/include \
               -L ort/lib -lonnxruntime \
+              -static-libstdc++ -static-libgcc \
               -Wl,-rpath,'$ORIGIN' \
               -o skin-infer
 
