@@ -1,0 +1,57 @@
+name: Build skin-infer
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      # manylinux2014 = CentOS 7 based, glibc 2.17.
+      # Building here means the binary will run on almost any modern
+      # Linux server (including RHEL9-based hosts like Hostinger's),
+      # since glibc is backward compatible but not forward compatible.
+      image: quay.io/pypa/manylinux2014_x86_64
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cmake
+        run: |
+          yum install -y cmake3 || true
+          ln -sf /usr/bin/cmake3 /usr/bin/cmake || true
+          cmake --version
+
+      - name: Fetch stb_image headers
+        run: |
+          curl -sSL -o stb_image.h https://raw.githubusercontent.com/nothings/stb/master/stb_image.h
+          curl -sSL -o stb_image_resize2.h https://raw.githubusercontent.com/nothings/stb/master/stb_image_resize2.h
+
+      - name: Fetch ONNX Runtime (prebuilt Linux x64 release)
+        run: |
+          ORT_VERSION=1.19.2
+          curl -sSL -o ort.tgz https://github.com/microsoft/onnxruntime/releases/download/v${ORT_VERSION}/onnxruntime-linux-x64-${ORT_VERSION}.tgz
+          tar xzf ort.tgz
+          mv onnxruntime-linux-x64-${ORT_VERSION} ort
+
+      - name: Compile
+        run: |
+          g++ -O2 -std=c++17 main.cpp \
+            -I ort/include \
+            -L ort/lib -lonnxruntime \
+            -Wl,-rpath,'$ORIGIN' \
+            -o skin-infer
+
+      - name: Package artifact (binary + required .so together)
+        run: |
+          mkdir -p out
+          cp skin-infer out/
+          cp ort/lib/libonnxruntime.so* out/
+          ls -la out/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: skin-infer-linux-x64
+          path: out/
