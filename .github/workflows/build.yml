@@ -8,20 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      # manylinux2014 = CentOS 7 based, glibc 2.17.
-      # Building here means the binary will run on almost any modern
-      # Linux server (including RHEL9-based hosts like Hostinger's),
-      # since glibc is backward compatible but not forward compatible.
-      image: quay.io/pypa/manylinux2014_x86_64
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install cmake
-        run: |
-          yum install -y cmake3 || true
-          ln -sf /usr/bin/cmake3 /usr/bin/cmake || true
-          cmake --version
 
       - name: Fetch stb_image headers
         run: |
@@ -35,13 +23,14 @@ jobs:
           tar xzf ort.tgz
           mv onnxruntime-linux-x64-${ORT_VERSION} ort
 
-      - name: Compile
+      - name: Compile inside old-glibc container (for compatibility with the target server)
         run: |
-          g++ -O2 -std=c++17 main.cpp \
-            -I ort/include \
-            -L ort/lib -lonnxruntime \
-            -Wl,-rpath,'$ORIGIN' \
-            -o skin-infer
+          docker run --rm -v "$PWD":/work -w /work quay.io/pypa/manylinux2014_x86_64 \
+            g++ -O2 -std=c++17 main.cpp \
+              -I ort/include \
+              -L ort/lib -lonnxruntime \
+              -Wl,-rpath,'$ORIGIN' \
+              -o skin-infer
 
       - name: Package artifact (binary + required .so together)
         run: |
